@@ -1,9 +1,10 @@
 import os, getpass
-from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from langgraph.graph import MessagesState
-from langchain_core.messages import HumanMessage
 from IPython.display import Image, display
+from langchain_core.messages import HumanMessage
 from langgraph.graph import START, StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
+from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
 def _set_env(var: str):
     if not os.environ.get(var):
@@ -14,13 +15,13 @@ _set_env("NVIDIA_API_KEY")
 model = ChatNVIDIA(model="meta/llama-3.3-70b-instruct")
 
 class State(MessagesState):
-    legal_act: str  # Store the legal act text
+    legal_act: str
     summary: str = ""  
     references: str = ""
 
 # Node 1
 def get_summary(state: State):
-    content_to_summarize = state["legal_act"]
+    content_to_summarize = state.get("legal_act", "")
     summary_message = f"Summarize the following legal act:\n\n{content_to_summarize}"
     
     messages = state["messages"] + [HumanMessage(content=summary_message)]
@@ -30,7 +31,9 @@ def get_summary(state: State):
 
 # Node 2
 def get_references(state: State):
-    references_message = f"List all Supreme Court judgments where the {state['summary']} was used in the judgment process."
+    content_to_get_references = state.get("summary", "")
+    
+    references_message = "List all Supreme Court judgments where this was used in the judgment process." + content_to_get_references
     
     messages = state["messages"] + [HumanMessage(content=references_message)]
     response = model.invoke(messages)
@@ -46,13 +49,26 @@ workflow.add_edge(START, "get_summary")
 workflow.add_edge("get_summary", "get_references")
 workflow.add_edge("get_references", END)
 
-graph = workflow.compile()
-display(Image(graph.get_graph().draw_mermaid_png()))
+memory= MemorySaver()
+graph = workflow.compile(interrupt_after=["get_summary"], checkpointer=memory)
 
-# Run the chatbot workflow with a legal act
-legal_act_text = "Name and territory of the Union 1. (1) India, that is Bharat, shall be a Union of States. [(2) The States and the territories thereof shall be as specified in the First Schedule]*. (3) The territory of India shall comprise- (a) the territories of the States; [(b) the Union territories specified in the First Schedule; and]** (c) such other territories as may be acquired. -------------------- * Subs. by the Constitution (Seventh Amendment) Act, 1956, s. 2, for cl. (2) ** Subs. by s. 2, ibid., for sub-clause (b)"
-initial_state = State(messages=[], legal_act=legal_act_text)
+legal_text = "THE CONSTITUTION (FIFTH AMENDMENT) ACT, 1955 [24th December, 1955.] An Act further to amend the Constitution of India.  BE it enacted by Parliament in the Sixth Year of the Republic of India as follows:---  1. Short title.-This Act may be called the Constitution (Fifth Amendment) Act, 1955.  2. Amendment of article 3.-In article 3 of the Constitution, for the proviso, the following proviso shall be substituted, namely:-  Provided that no Bill for the purpose shall be introduced in either House of Parliament except on the recommendation of the President and unless, where the proposal contained in the Bill affects the area, boundaries or name of any of the States specified in Part A or Part B of the First Schedule, the Bill has been referred by the President to the Legislature of that State for expressing its views thereon within such period as may be specified in the reference or within such further period as the President may allow and the period so specified or allowed has expired."
 
-output = graph.invoke(initial_state)
+initial_state = State(messages=[], legal_act=legal_text)
+thread = {"configurable": {"thread_id": "1"}}
+
+output = graph.invoke(initial_state, thread)
 print("Summary:", output["summary"])
-print("References:", output["references"])
+print("-----"*25)
+
+# Get user feedback
+user_approval = input("Do you want to fetch related references as well? (yes/no): ")
+
+if user_approval.lower() == "yes":
+    
+    output = graph.invoke(None, thread)
+    print("References:", output["references"])
+        
+else:
+    print("Operation cancelled by user.")
+    

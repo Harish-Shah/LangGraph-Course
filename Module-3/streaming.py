@@ -8,11 +8,9 @@
 import os, getpass
 
 from IPython.display import Image, display
-
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from langchain_core.messages import SystemMessage, HumanMessage, RemoveMessage
 from langchain_core.runnables import RunnableConfig
-
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph import MessagesState
@@ -108,18 +106,18 @@ graph = workflow.compile(checkpointer=memory)
 config = {"configurable": {"thread_id": "1"}}
 
 # Start conversation
-for chunk in graph.stream({"messages": [HumanMessage(content="hi! I'm Haris")]}, config, stream_mode="updates"):
-    chunk['conversation']["messages"].pretty_print()
+# for chunk in graph.stream({"messages": [HumanMessage(content="hi! I'm Haris")]}, config, stream_mode="updates"):
+#     chunk['conversation']["messages"].pretty_print()
     
 # Start conversation, again
 config = {"configurable": {"thread_id": "2"}}
 
 # Start conversation with stream_mode="values"
-input_message = HumanMessage(content="hi! I'm Haris")
-for event in graph.stream({"messages": [input_message]}, config, stream_mode="values"):
-    for m in event['messages']:
-        m.pretty_print()
-    print("---"*25)
+# input_message = HumanMessage(content="hi! I'm Haris")
+# for event in graph.stream({"messages": [input_message]}, config, stream_mode="values"):
+#     for m in event['messages']:
+#         m.pretty_print()
+#     print("---"*25)
     
 config = {"configurable": {"thread_id": "3"}}
 input_message = HumanMessage(content="Tell me about the 49ers NFL team")
